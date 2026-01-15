@@ -53,8 +53,8 @@ const Header = () => {
   return (
     <motion.header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${isScrolled
-          ? "py-2 bg-cafe-black/95 backdrop-blur-lg border-b border-primary/10 shadow-lg"
-          : "py-4 bg-transparent"
+        ? "py-2 bg-cafe-black/95 backdrop-blur-lg border-b border-primary/10 shadow-lg"
+        : "py-4 bg-transparent"
         }`}
       initial={{ y: -100 }}
       animate={{ y: 0 }}
@@ -85,8 +85,8 @@ const Header = () => {
                 key={item.to}
                 to={item.to}
                 className={`relative text-sm font-medium tracking-wide uppercase transition-colors duration-300 hover-underline ${isActive(item.to)
-                    ? "text-primary"
-                    : "text-cafe-white/80 hover:text-cafe-white"
+                  ? "text-primary"
+                  : "text-cafe-white/80 hover:text-cafe-white"
                   }`}
               >
                 {item.label}
@@ -123,22 +123,12 @@ const Header = () => {
               </Link>
             )}
 
-            {/* Auth Section */}
+            {/* Auth Section - Only show for logged in users */}
             {loading ? (
               <div className="w-8 h-8 rounded-full bg-primary/20 animate-pulse" />
             ) : user ? (
               <UserMenu />
-            ) : (
-              <Link to="/auth">
-                <Button
-                  variant="outline"
-                  className="border-primary/50 text-primary hover:bg-primary/10 font-medium px-4 py-2 rounded-full transition-all duration-300"
-                >
-                  <LogIn className="w-4 h-4 mr-2" />
-                  Sign In
-                </Button>
-              </Link>
-            )}
+            ) : null}
           </nav>
 
           {/* Mobile Menu Button */}
@@ -199,8 +189,8 @@ const Header = () => {
                     <Link
                       to={item.to}
                       className={`block py-3 px-4 rounded-lg font-medium text-center uppercase tracking-wide transition-all duration-300 ${isActive(item.to)
-                          ? "bg-primary/10 text-primary"
-                          : "text-cafe-white hover:bg-cafe-white/5"
+                        ? "bg-primary/10 text-primary"
+                        : "text-cafe-white hover:bg-cafe-white/5"
                         }`}
                       onClick={toggleMenu}
                     >
@@ -242,29 +232,19 @@ const Header = () => {
                   </motion.div>
                 )}
 
-                {/* Mobile Auth */}
-                <motion.div
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.25 }}
-                  className="pt-4"
-                >
-                  {user ? (
+                {/* Mobile Auth - Only show for logged in users */}
+                {user && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.25 }}
+                    className="pt-4"
+                  >
                     <div className="text-center text-cafe-white/70 text-sm">
                       Signed in as {user.email}
                     </div>
-                  ) : (
-                    <Link to="/auth" onClick={toggleMenu}>
-                      <Button
-                        variant="outline"
-                        className="w-full border-primary/50 text-primary hover:bg-primary/10 font-semibold py-4 rounded-full"
-                      >
-                        <LogIn className="w-5 h-5 mr-2" />
-                        Sign In
-                      </Button>
-                    </Link>
-                  )}
-                </motion.div>
+                  </motion.div>
+                )}
               </nav>
             </motion.div>
           )}

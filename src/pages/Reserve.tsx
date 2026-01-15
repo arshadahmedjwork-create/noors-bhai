@@ -15,10 +15,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import GoogleSignInCard from "@/components/reservation/GoogleSignInCard";
-import BookingCalendar from "@/components/reservation/BookingCalendar";
+import CalendlyEmbed from "@/components/reservation/CalendlyEmbed";
 import BookingConfirmation from "@/components/reservation/BookingConfirmation";
 
-// Form validation schema (session removed - handled by calendar slot selection)
+// Form validation schema (session removed - handled by Calendly)
 const bookingFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(100, "Name must be less than 100 characters"),
   email: z.string().email("Please enter a valid email address"),
@@ -33,7 +33,7 @@ type BookingFormData = z.infer<typeof bookingFormSchema>;
 // LocalStorage key for persisting user form data
 const FORM_STORAGE_KEY = 'nbb_booking_form_data';
 
-type ReservationStage = "signin" | "form" | "calendar" | "confirmation";
+type ReservationStage = "signin" | "form" | "calendly" | "confirmation";
 
 const ReservePage = () => {
   const navigate = useNavigate();
@@ -43,12 +43,6 @@ const ReservePage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [bookingDetails, setBookingDetails] = useState<any>(null);
-  const [selectedSlot, setSelectedSlot] = useState<{
-    date: Date;
-    session: string;
-    startTime: string;
-    endTime: string;
-  } | null>(null);
 
   // Form state - initialize from localStorage if available
   const [formData, setFormData] = useState(() => {
@@ -181,7 +175,7 @@ const ReservePage = () => {
         email: formData.email!,
         phone: formData.phone!,
         guest_count: formData.guestCount!,
-        session: null, // Session handled by calendar time slot selection
+        session: null, // Session handled by Calendly time slot selection
         notes: formData.notes || null,
         status: 'submitted',
       };
@@ -207,7 +201,7 @@ const ReservePage = () => {
       }
 
       setDraftId(result.data.id);
-      setStage("calendar");
+      setStage("calendly");
 
       toast({
         title: "Details Saved",
@@ -225,14 +219,8 @@ const ReservePage = () => {
     }
   };
 
-  const handleSlotSelect = (date: Date, session: string, startTime: string, endTime: string) => {
-    setSelectedSlot({ date, session, startTime, endTime });
-  };
-
-  const handleConfirmBooking = async () => {
-    if (!user || !draftId || !selectedSlot) return;
-
-    setIsSubmitting(true);
+  const handleCalendlyBookingComplete = async (eventUri: string, inviteeUri: string, startTime: string, endTime: string) => {
+    if (!user || !draftId) return;
 
     try {
       // Create the booking record
@@ -242,12 +230,14 @@ const ReservePage = () => {
           user_id: user.id,
           draft_id: draftId,
           status: 'confirmed',
-          booking_source: 'website',
-          scheduled_start: selectedSlot.startTime,
-          scheduled_end: selectedSlot.endTime,
+          booking_source: 'calendly',
+          scheduled_start: startTime,
+          scheduled_end: endTime,
           guest_count: formData.guestCount!,
           phone: formData.phone!,
           notes: formData.notes || null,
+          calendly_event_uri: eventUri,
+          calendly_invitee_uri: inviteeUri,
         })
         .select()
         .single();
@@ -259,40 +249,35 @@ const ReservePage = () => {
         name: formData.name,
         email: formData.email,
         guestCount: formData.guestCount,
-        scheduledStart: selectedSlot.startTime,
-        scheduledEnd: selectedSlot.endTime,
+        scheduledStart: startTime,
+        scheduledEnd: endTime,
         status: 'confirmed',
       });
-
-      // Clear the saved form data on successful booking
-      localStorage.removeItem(FORM_STORAGE_KEY);
 
       setStage("confirmation");
 
       toast({
-        title: "Booking Confirmed! 🎉",
+        title: "Booking Confirmed",
         description: "Your buffet reservation has been successfully booked.",
       });
     } catch (error: any) {
       console.error('Error creating booking:', error);
       toast({
         title: "Booking Error",
-        description: error.message || "Something went wrong. Please try again.",
+        description: "Your slot is reserved. We'll confirm shortly.",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   const progressSteps = [
     { key: "form", label: "Details", number: 1, icon: User },
-    { key: "calendar", label: "Schedule", number: 2, icon: Calendar },
+    { key: "calendly", label: "Schedule", number: 2, icon: Calendar },
     { key: "confirmation", label: "Confirmed", number: 3, icon: Check },
   ];
 
   const getStepStatus = (stepKey: string) => {
-    const stageOrder = ["signin", "form", "calendar", "confirmation"];
+    const stageOrder = ["signin", "form", "calendly", "confirmation"];
     const currentIndex = stageOrder.indexOf(stage);
     const stepIndex = stageOrder.indexOf(stepKey);
 
@@ -573,10 +558,10 @@ const ReservePage = () => {
                 </motion.div>
               )}
 
-              {/* Calendar Booking */}
-              {stage === "calendar" && (
+              {/* Calendly Embed */}
+              {stage === "calendly" && (
                 <motion.div
-                  key="calendar"
+                  key="calendly"
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
@@ -613,48 +598,15 @@ const ReservePage = () => {
                     </div>
                   </div>
 
-                  <BookingCalendar
-                    onSlotSelect={handleSlotSelect}
-                    selectedSlot={selectedSlot ? { date: selectedSlot.date, session: selectedSlot.session } : null}
+                  <CalendlyEmbed
+                    prefillData={{
+                      name: formData.name || "",
+                      email: formData.email || "",
+                      phone: formData.phone || "",
+                      guests: formData.guestCount?.toString() || "2",
+                    }}
+                    onBookingComplete={handleCalendlyBookingComplete}
                   />
-
-                  {/* Confirm Booking Button */}
-                  {selectedSlot && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-card rounded-2xl p-6 shadow-sm border border-border"
-                    >
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Selected Time</p>
-                          <p className="text-lg font-semibold text-foreground">
-                            {format(selectedSlot.date, "EEEE, MMMM d, yyyy")}
-                          </p>
-                          <p className="text-primary font-medium">
-                            {format(new Date(selectedSlot.startTime), "h:mm a")} - {format(new Date(selectedSlot.endTime), "h:mm a")}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        onClick={handleConfirmBooking}
-                        disabled={isSubmitting}
-                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6 rounded-xl transition-all duration-300 shadow-lg shadow-primary/20"
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Confirming Reservation...
-                          </>
-                        ) : (
-                          <>
-                            <Check className="mr-2 h-4 w-4" />
-                            Confirm Reservation for {formData.guestCount} Guests
-                          </>
-                        )}
-                      </Button>
-                    </motion.div>
-                  )}
                 </motion.div>
               )}
 
